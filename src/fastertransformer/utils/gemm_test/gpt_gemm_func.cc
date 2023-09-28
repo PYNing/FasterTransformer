@@ -39,12 +39,14 @@ void generate_gpt_gemm_config(int   batch_size,
     void* cublas_workspace;
     void* buffer;
     int   workSpaceSize;
-    bool  workspace_flag = std::is_same<T, half>::value;
+    const bool  workspace_flag = 0;
+#if 0
 #ifdef ENABLE_FP8
     workspace_flag = workspace_flag || std::is_same<T, __nv_fp8_e4m3>::value;
 #endif
 #if ENABLE_BF16
     workspace_flag = workspace_flag || std::is_same<T, __nv_bfloat16>::value;
+#endif
 #endif
     if (workspace_flag) {
         // cublas_workspace_ should be the start pointer of cudaMalloc()
@@ -77,17 +79,17 @@ void generate_gpt_gemm_config(int   batch_size,
             config.push_back(std::string(line));
         }
         line_count = config.size();
-        if (config.size() >= (MAX_CONFIG_NUM * GEMM_NUM + 1))  // 6 cublas/cublasLt, first row is not included
-        {
-            int startIdx = config.size() - ((MAX_CONFIG_NUM - 1) * GEMM_NUM);
-            fclose(fd);
-            fd = fopen(GEMM_CONFIG, "w+");
-            fprintf(fd, "%s", config[0].c_str());
-            for (uint i = startIdx; i < config.size(); i++) {
-                fprintf(fd, "%s", config[i].c_str());
-            }
-            line_count = config.size() - (GEMM_NUM + 3);
-        }
+        // if (config.size() >= (MAX_CONFIG_NUM * GEMM_NUM + 1))  // 6 cublas/cublasLt, first row is not included
+        // {
+        //     int startIdx = config.size() - ((MAX_CONFIG_NUM - 1) * GEMM_NUM);
+        //     fclose(fd);
+        //     fd = fopen(GEMM_CONFIG, "w+");
+        //     fprintf(fd, "%s", config[0].c_str());
+        //     for (uint i = startIdx; i < config.size(); i++) {
+        //         fprintf(fd, "%s", config[i].c_str());
+        //     }
+        //     line_count = config.size() - (GEMM_NUM + 3);
+        // }
     }
 
     const int hidden_units         = head_num * size_per_head;
@@ -108,7 +110,7 @@ void generate_gpt_gemm_config(int   batch_size,
     // gemm 0
     M[0]          = batch_size * beam_width * max_input_len;
     K[0]          = hidden_units;
-    N[0]          = 3 * local_hidden_units;
+    N[0]          = local_hidden_units + local_hidden_units / 8 + local_hidden_units / 8;
     batchCount[0] = 1;
     strideA[0]    = 0;
     strideB[0]    = 0;
@@ -148,7 +150,7 @@ void generate_gpt_gemm_config(int   batch_size,
     // gemm 4
     M[4]          = batch_size * beam_width * max_input_len;
     K[4]          = hidden_units;
-    N[4]          = inter_size / tensor_para_size;
+    N[4]          = 2 * inter_size / tensor_para_size;
     batchCount[4] = 1;
     strideA[4]    = 0;
     strideB[4]    = 0;
@@ -168,7 +170,7 @@ void generate_gpt_gemm_config(int   batch_size,
     // gemm 6
     M[6]          = batch_size * beam_width;
     K[6]          = hidden_units;
-    N[6]          = 3 * local_hidden_units;
+    N[6]          = local_hidden_units + local_hidden_units / 8 + local_hidden_units / 8;
     batchCount[6] = 1;
     strideA[6]    = 0;
     strideB[6]    = 0;
@@ -188,7 +190,7 @@ void generate_gpt_gemm_config(int   batch_size,
     // gemm 8
     M[8]          = batch_size * beam_width;
     K[8]          = hidden_units;
-    N[8]          = inter_size / tensor_para_size;
+    N[8]          = 2 * inter_size / tensor_para_size;
     batchCount[8] = 1;
     strideA[8]    = 0;
     strideB[8]    = 0;
